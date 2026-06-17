@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>バンドネオン MIDI ビジュアライザー</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #12080a;
+    color: #f0ddb8;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    gap: 14px;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 300;
+    letter-spacing: 0.15em;
+    color: #d4a040;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  #drop-zone {
+    width: 100%; max-width: 760px;
+    border: 2px dashed #6a3820; border-radius: 10px;
+    padding: 20px; text-align: center; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: #1c0d0f;
+  }
+  #drop-zone:hover, #drop-zone.dragover { border-color: #d4a040; background: #241010; }
+  #drop-zone p { color: #a07050; font-size: 0.95rem; }
+  #drop-zone p span { color: #d4a040; font-weight: bold; }
+  #file-input { display: none; }
+  #file-name { font-size: 0.85rem; color: #c0a070; margin-top: 6px; min-height: 1.2em; }
+
+  /* Controls */
+  #controls {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    background: #1c0d0f; border: 1px solid #3a1a0e;
+    border-radius: 10px; padding: 12px 18px;
+    max-width: 760px; width: 100%;
+  }
+
+  .ctrl-btn {
+    background: #3a1a12; border: 1px solid #5a2a1a;
+    color: #f0ddb8; border-radius: 8px; padding: 8px 14px;
+    cursor: pointer; font-size: 1rem;
+    transition: background 0.15s, border-color 0.15s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .ctrl-btn:hover { background: #5a2a1a; border-color: #d4a040; }
+  .ctrl-btn:disabled { opacity: 0.35; cursor: default; }
+  .ctrl-btn.primary { background: #7a3010; border-color: #d4a040; }
+  .ctrl-btn.primary:hover { background: #9a4020; }
+
+  .bellows-btn {
+    background: #1a2a3a; border: 1px solid #2a4a6a;
+    color: #80c0e0; border-radius: 8px; padding: 8px 16px;
+    cursor: pointer; font-size: 0.9rem; font-weight: bold;
+    letter-spacing: 0.05em; transition: background 0.15s;
+  }
+  .bellows-btn:hover { background: #2a4a6a; }
+  .bellows-btn.close-mode { background: #2a1a3a; border-color: #6a4a8a; color: #c080e0; }
+
+  .separator { width: 1px; height: 32px; background: #3a1a0e; flex-shrink: 0; }
+
+  .slider-group {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.82rem; color: #c0a070;
+  }
+  .slider-group input[type=range] {
+    -webkit-appearance: none;
+    height: 5px; background: #3a1a12; border-radius: 3px; cursor: pointer;
+  }
+  .slider-group input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px;
+    border-radius: 50%; background: #d4a040;
+  }
+  #tempo-slider { width: 100px; }
+  #volume-slider { width: 80px; }
+  .slider-val { min-width: 44px; text-align: center; color: #d4a040; font-weight: bold; font-size: 0.82rem; }
+
+  /* Progress */
+  #progress-wrap {
+    width: 100%; max-width: 760px;
+    background: #1c0d0f; border: 1px solid #3a1a0e;
+    border-radius: 10px; padding: 10px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  #progress-bar-bg {
+    flex: 1; height: 8px; background: #2a1008;
+    border-radius: 4px; cursor: pointer; position: relative;
+  }
+  #progress-bar-fill {
+    height: 100%; background: #d4a040; border-radius: 4px;
+    width: 0%; pointer-events: none;
+  }
+  #time-display { font-size: 0.85rem; color: #c0a070; min-width: 100px; text-align: right; }
+
+  /* Bellows indicator */
+  #bellows-indicator {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; font-size: 0.9rem; color: #a07050; margin: 2px 0;
+  }
+  .bellows-arrow { font-size: 1.4rem; transition: opacity 0.2s; }
+  .bellows-label { font-weight: bold; font-size: 1rem; letter-spacing: 0.08em; }
+  .open-label { color: #d4a040; }
+  .close-label { color: #a040d4; }
+
+  /* Bandoneon */
+  #bandoneon-wrap {
+    display: flex; flex-direction: column; gap: 20px;
+    width: 100%; align-items: center;
+  }
+  .hand-section {
+    background: #180c0e; border: 1px solid #3a1a0e;
+    border-radius: 12px; padding: 16px 20px;
+    display: inline-block;
+  }
+  .hand-title {
+    font-size: 0.8rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: #8a5030;
+    margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
+  }
+  .hand-title::after { content: ''; flex: 1; height: 1px; background: #3a1a0e; }
+  .key-grid { position: relative; }
+
+  .btn-key {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #4a2a18, #2a1008);
+    border: 2px solid #5a3020;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: #c09060;
+    cursor: default; user-select: none; flex-shrink: 0;
+    transition: background 0.06s, border-color 0.06s, box-shadow 0.06s;
+  }
+  .btn-key .note-label { font-size: 16px; line-height: 1; text-align: center; pointer-events: none; }
+  .btn-key .sharp { font-size: 11px; vertical-align: super; }
+
+  .btn-key.right-active {
+    background: radial-gradient(circle at 35% 30%, #f0a030, #c06010);
+    border-color: #ffd060;
+    box-shadow: 0 0 12px 4px rgba(240,160,48,0.65);
+    color: #fffbe0;
+  }
+  .btn-key.left-active {
+    background: radial-gradient(circle at 35% 30%, #30a0f0, #1060c0);
+    border-color: #60d0ff;
+    box-shadow: 0 0 12px 4px rgba(48,160,240,0.65);
+    color: #e0f8ff;
+  }
+
+  #info-bar { font-size: 0.78rem; color: #6a4020; text-align: center; max-width: 760px; }
+</style>
+</head>
+<body>
+
+<h1>🎻 バンドネオン MIDI ビジュアライザー</h1>
+
+<div id="drop-zone" onclick="document.getElementById('file-input').click()">
+  <p>MIDIファイルをここにドロップ、または <span>クリックして選択</span></p>
+  <div id="file-name">ファイル未選択</div>
+  <input type="file" id="file-input" accept=".mid,.midi">
+</div>
+
+<div id="bellows-indicator">
+  <span class="bellows-arrow" id="arrow-left">←</span>
+  <span class="bellows-label open-label" id="bellows-label">開き (Abriendo)</span>
+  <span class="bellows-arrow" id="arrow-right">→</span>
+</div>
+
+<div id="controls">
+  <button class="ctrl-btn" id="btn-back" disabled>⏪ 10秒</button>
+  <button class="ctrl-btn primary" id="btn-play" disabled>▶ 再生</button>
+  <button class="ctrl-btn" id="btn-pause" disabled>⏸ 一時停止</button>
+  <button class="ctrl-btn" id="btn-forward" disabled>10秒 ⏩</button>
+
+  <div class="separator"></div>
+
+  <div class="slider-group">
+    <span>テンポ</span>
+    <input type="range" id="tempo-slider" min="25" max="200" value="100">
+    <span class="slider-val" id="tempo-val">100%</span>
+  </div>
+
+  <div class="separator"></div>
+
+  <div class="slider-group">
+    <span>🔊</span>
+    <input type="range" id="volume-slider" min="0" max="100" value="70">
+    <span class="slider-val" id="volume-val">70%</span>
+  </div>
+
+  <div class="separator"></div>
+
+  <button class="bellows-btn" id="btn-bellows">🔄 開き / 閉じ</button>
+</div>
+
+<div id="progress-wrap">
+  <div id="progress-bar-bg">
+    <div id="progress-bar-fill"></div>
+  </div>
+  <div id="time-display">0:00 / 0:00</div>
+</div>
+
+<div id="bandoneon-wrap">
+  <div class="hand-section">
+    <div class="hand-title">右手 (Mano Derecha) — 38 ボタン</div>
+    <div id="right-hand-grid" class="key-grid"></div>
+  </div>
+  <div class="hand-section">
+    <div class="hand-title">左手 (Mano Izquierda) — 33 ボタン</div>
+    <div id="left-hand-grid" class="key-grid"></div>
+  </div>
+</div>
+
+<div id="info-bar">
+  アルゼンチンタンゴ用バンドネオン（ライン式 142音・AA式）— 右手38ボタン、左手33ボタン
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  BANDONEON LAYOUT  (Rheinische Tonlage 142 / AA式)
+//  rows: inner → outer  |  { o: midiOpen, c: midiClose }
+// ══════════════════════════════════════════════════════════
+
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function midiToFreq(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+function midiToName(n) {
+  if (n == null) return '?';
+  return NOTE_NAMES[n % 12] + (Math.floor(n/12)-1);
+}
+function midiToLabel(n) {
+  if (n == null) return '?';
+  const nm = NOTE_NAMES[n % 12];
+  const oct = Math.floor(n/12)-1;
+  return nm.length===2
+    ? `<span class="note-label">${nm[0]}<span class="sharp">#</span>${oct}</span>`
+    : `<span class="note-label">${nm}${oct}</span>`;
+}
+
+// Correct Rheinische Tonlage 142 layout — pixel coords from authoritative QML source
+// px/py = button center in 640×460 coordinate space
+// o = MIDI note when opening (abriendo), c = MIDI note when closing (cerrando)
+const TREBLE_BUTTONS = [  // 38 right-hand buttons
+  {px:447,py:115,o:58,c:58},{px:457,py:144,o:63,c:63},
+  {px:467,py:178,o:77,c:77},{px:466,py:212,o:75,c:76},
+  {px:464,py:240,o:78,c:80},{px:463,py:279,o:81,c:83},
+  {px:453,py:314,o:85,c:88},{px:445,py:352,o:79,c:75},
+  {px:471,py:105,o:57,c:57},{px:482,py:134,o:65,c:65},
+  {px:492,py:165,o:70,c:64},{px:492,py:196,o:68,c:69},
+  {px:490,py:231,o:71,c:73},{px:488,py:266,o:74,c:76},
+  {px:479,py:302,o:80,c:81},{px:471,py:336,o:83,c:85},
+  {px:506,py:124,o:59,c:59},{px:515,py:154,o:64,c:66},
+  {px:517,py:184,o:73,c:78},{px:515,py:221,o:66,c:67},
+  {px:514,py:252,o:69,c:71},{px:507,py:287,o:72,c:74},
+  {px:500,py:323,o:76,c:79},{px:533,py:138,o:60,c:62},
+  {px:537,py:169,o:62,c:61},{px:538,py:201,o:67,c:68},
+  {px:536,py:239,o:82,c:70},{px:533,py:274,o:84,c:72},
+  {px:525,py:312,o:86,c:86},{px:555,py:149,o:61,c:60},
+  {px:557,py:184,o:93,c:91},{px:557,py:220,o:90,c:82},
+  {px:555,py:259,o:88,c:84},{px:549,py:297,o:87,c:87},
+  {px:575,py:166,o:95,c:93},{px:575,py:203,o:92,c:92},
+  {px:572,py:242,o:91,c:90},{px:569,py:279,o:89,c:89}
+];
+
+const BASS_BUTTONS = [  // 33 left-hand buttons
+  {px:209,py:111,o:36,c:41},{px:199,py:149,o:39,c:37},
+  {px:191,py:185,o:54,c:53},{px:190,py:221,o:63,c:71},
+  {px:192,py:258,o:69,c:68},{px:198,py:295,o:67,c:66},
+  {px:206,py:323,o:47,c:52},{px:215,py:354,o:38,c:40},
+  {px:181,py:125,o:42,c:47},{px:170,py:165,o:61,c:56},
+  {px:164,py:200,o:66,c:64},{px:164,py:234,o:62,c:61},
+  {px:164,py:271,o:59,c:57},{px:170,py:306,o:56,c:52},
+  {px:177,py:339,o:52,c:45},{px:155,py:137,o:43,c:54},
+  {px:142,py:177,o:48,c:65},{px:141,py:211,o:64,c:62},
+  {px:139,py:246,o:60,c:59},{px:141,py:283,o:57,c:55},
+  {px:146,py:324,o:50,c:43},{px:138,py:110,o:41,c:42},
+  {px:127,py:149,o:58,c:48},{px:117,py:191,o:65,c:49},
+  {px:116,py:229,o:51,c:60},{px:117,py:265,o:55,c:58},
+  {px:120,py:305,o:45,c:50},{px:115,py:124,o:53,c:67},
+  {px:102,py:163,o:68,c:63},{px:97, py:212,o:49,c:51},
+  {px:95, py:246,o:46,c:46},{px:99, py:287,o:44,c:44},
+  {px:125,py:344,o:40,c:38}
+];
+
+// Rendering constants
+const T_OFF_X=432, T_OFF_Y=92;   // treble coordinate origin
+const B_OFF_X=82,  B_OFF_Y=98;   // bass coordinate origin
+const COORD_SCALE=2.2, BTN_DIAM=52;
+
+// Build note → button lookup
+function buildLookup() {
+  const lk={open:{},close:{}};
+  function add(mode,note,idx,hand){
+    if(note==null) return;
+    if(!lk[mode][note]) lk[mode][note]=[];
+    lk[mode][note].push({hand,idx});
+  }
+  TREBLE_BUTTONS.forEach((b,i)=>{add('open',b.o,i,'treble');add('close',b.c,i,'treble');});
+  BASS_BUTTONS.forEach((b,i)=>{add('open',b.o,i,'bass');add('close',b.c,i,'bass');});
+  return lk;
+}
+const NOTE_LOOKUP = buildLookup();
+
+// ══════════════════════════════════════════════════════════
+//  RENDER GRIDS  — absolute-positioned fan layout
+// ══════════════════════════════════════════════════════════
+
+// rotation: 0 = none, -90 = 90° CCW (left), 90 = 90° CW (right)
+function renderHand(containerId, buttons, offX, offY, isOpen, rotation) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  const r = BTN_DIAM / 2;
+
+  // Raw display coordinates
+  let coords = buttons.map(btn => ({
+    cx: (btn.px - offX) * COORD_SCALE,
+    cy: (btn.py - offY) * COORD_SCALE
+  }));
+
+  // Apply rotation
+  if (rotation === -90) {
+    // 90° CCW: (cx,cy) → (maxCy - cy, cx)
+    const maxCy = Math.max(...coords.map(c => c.cy));
+    coords = coords.map(c => ({ cx: maxCy - c.cy, cy: c.cx }));
+  } else if (rotation === 90) {
+    // 90° CW: (cx,cy) → (cy, maxCx - cx)
+    const maxCx = Math.max(...coords.map(c => c.cx));
+    coords = coords.map(c => ({ cx: c.cy, cy: maxCx - c.cx }));
+  } else if (rotation === 180 || rotation === -180) {
+    // 180°: (cx,cy) → (maxCx - cx, maxCy - cy)
+    const maxCx = Math.max(...coords.map(c => c.cx));
+    const maxCy = Math.max(...coords.map(c => c.cy));
+    coords = coords.map(c => ({ cx: maxCx - c.cx, cy: maxCy - c.cy }));
+  }
+
+  // Shift so no button edge goes negative
+  const minCx = Math.min(...coords.map(c => c.cx));
+  const minCy = Math.min(...coords.map(c => c.cy));
+  const shiftX = Math.max(0, r - minCx);
+  const shiftY = Math.max(0, r - minCy);
+  coords = coords.map(c => ({ cx: c.cx + shiftX, cy: c.cy + shiftY }));
+
+  const maxFx = Math.max(...coords.map(c => c.cx));
+  const maxFy = Math.max(...coords.map(c => c.cy));
+
+  buttons.forEach((btn, idx) => {
+    const note = isOpen ? btn.o : btn.c;
+    const { cx, cy } = coords[idx];
+    const el = document.createElement('div');
+    el.className = 'btn-key';
+    el.dataset.idx = idx;
+    el.style.cssText = `position:absolute;left:${(cx-r).toFixed(1)}px;top:${(cy-r).toFixed(1)}px;width:${BTN_DIAM}px;height:${BTN_DIAM}px`;
+    el.title = midiToName(note) + (isOpen ? ' (開)' : ' (閉)');
+    el.innerHTML = midiToLabel(note);
+    container.appendChild(el);
+  });
+
+  container.style.width  = Math.ceil(maxFx + r + 4) + 'px';
+  container.style.height = Math.ceil(maxFy + r + 4) + 'px';
+}
+function renderBoth(isOpen) {
+  renderHand('right-hand-grid', TREBLE_BUTTONS, T_OFF_X, T_OFF_Y, isOpen,  90);  // 90° CW  → A#3/G5 at bottom
+  renderHand('left-hand-grid',  BASS_BUTTONS,   B_OFF_X, B_OFF_Y, isOpen, -90);  // 90° CCW → C2/D2 at bottom
+}
+
+// ══════════════════════════════════════════════════════════
+//  MIDI PARSER
+// ══════════════════════════════════════════════════════════
+
+function parseMIDI(buffer) {
+  const u8 = new Uint8Array(buffer);
+  let pos = 0;
+  const r8  = () => u8[pos++];
+  const r16 = () => (r8()<<8)|r8();
+  const r32 = () => (((r8()<<24)|(r8()<<16)|(r8()<<8)|r8())>>>0);
+  function rVarLen() {
+    let v=0,b; do { b=r8(); v=(v<<7)|(b&0x7F); } while(b&0x80); return v;
+  }
+
+  r32(); r32(); // MThd + length
+  const fmt  = r16();
+  const nTrk = r16();
+  const tdiv = r16();
+  const ppqn = (tdiv & 0x8000) ? 480 : (tdiv || 480);
+
+  const allEvents = [];
+
+  for (let t = 0; t < nTrk; t++) {
+    r32(); // MTrk
+    const tLen = r32();
+    const tEnd = pos + tLen;
+    let absTick = 0, lastStatus = 0;
+
+    while (pos < tEnd) {
+      const delta = rVarLen();
+      absTick += delta;
+      let sb = u8[pos];
+      if (sb & 0x80) { lastStatus=sb; pos++; } else sb=lastStatus;
+      const type=(sb>>4)&0xF, ch=sb&0xF;
+
+      if (type===0xF && ch===0xF) {
+        const mt=r8(), ml=rVarLen();
+        if (mt===0x51 && ml>=3) {
+          const us=(u8[pos]<<16)|(u8[pos+1]<<8)|u8[pos+2];
+          allEvents.push({tick:absTick,type:'tempo',usPerBeat:us});
+        }
+        pos+=ml;
+      } else if (type===0xF && ch===0x0) {
+        const sl=rVarLen(); pos+=sl;
+      } else if (type===0x9) {
+        const n=r8(),v=r8();
+        allEvents.push({tick:absTick,type:v>0?'on':'off',ch,note:n,vel:v});
+      } else if (type===0x8) {
+        const n=r8(); r8();
+        allEvents.push({tick:absTick,type:'off',ch,note:n});
+      } else if (type===0xA||type===0xB||type===0xE) { r8();r8(); }
+        else if (type===0xC||type===0xD) { r8(); }
+        else pos++;
+    }
+    pos=tEnd;
+  }
+
+  allEvents.sort((a,b)=>a.tick-b.tick);
+  return {ppqn, events:allEvents};
+}
+
+function buildSegments(midi) {
+  const {ppqn, events} = midi;
+  let usPerBeat=500000, curTick=0, curSec=0;
+  const timeMap=[{tick:0,sec:0,usPerBeat}];
+
+  for (const ev of events) {
+    if (ev.type==='tempo') {
+      curSec += (ev.tick-curTick)*(usPerBeat/1e6)/ppqn;
+      curTick=ev.tick; usPerBeat=ev.usPerBeat;
+      timeMap.push({tick:curTick,sec:curSec,usPerBeat});
+    }
+  }
+
+  function tickToSec(tick) {
+    let lo=0,hi=timeMap.length-1;
+    while(lo<hi){const m=(lo+hi+1)>>1; if(timeMap[m].tick<=tick)lo=m;else hi=m-1;}
+    const s=timeMap[lo];
+    return s.sec+(tick-s.tick)*(s.usPerBeat/1e6)/ppqn;
+  }
+
+  const pending={};
+  const segments=[];
+  let maxSec=0;
+
+  for (const ev of events) {
+    if(ev.type!=='on'&&ev.type!=='off') continue;
+    const sec=tickToSec(ev.tick);
+    if(sec>maxSec) maxSec=sec;
+    const key=`${ev.ch}-${ev.note}`;
+    if(ev.type==='on') {
+      if(!pending[key]) pending[key]=[];
+      pending[key].push({startSec:sec});
+    } else {
+      if(pending[key]&&pending[key].length>0) {
+        const p=pending[key].shift();
+        if(sec>p.startSec) segments.push({note:ev.note,ch:ev.ch,startSec:p.startSec,endSec:sec});
+      }
+    }
+  }
+  for(const key in pending) {
+    const [ch,note]=key.split('-').map(Number);
+    for(const p of pending[key])
+      segments.push({note,ch,startSec:p.startSec,endSec:maxSec+0.5});
+  }
+  segments.sort((a,b)=>a.startSec-b.startSec);
+
+  return {segments, totalSec:maxSec+0.5};
+}
+
+// ══════════════════════════════════════════════════════════
+//  WEB AUDIO — BANDONEON SYNTHESIS
+// ══════════════════════════════════════════════════════════
+
+let audioCtx = null;
+let masterGain = null;
+let volumeLevel = 0.7;
+let activeOscillators = [];  // oscillators to be stopped on pause/seek
+
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  // Compressor to prevent clipping with polyphony
+  const comp = audioCtx.createDynamicsCompressor();
+  comp.threshold.value = -18;
+  comp.knee.value = 8;
+  comp.ratio.value = 4;
+  comp.attack.value = 0.005;
+  comp.release.value = 0.15;
+
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = volumeLevel;
+
+  masterGain.connect(comp);
+  comp.connect(audioCtx.destination);
+}
+
+function scheduleNote(freq, startAt, endAt, vel) {
+  if (!audioCtx || endAt <= audioCtx.currentTime) return;
+
+  const now = audioCtx.currentTime;
+  const actualStart = Math.max(startAt, now + 0.002);
+  const duration = endAt - actualStart;
+  if (duration <= 0) return;
+
+  const velScale = Math.min(1.0, (vel || 80) / 100);
+
+  // — Two slightly detuned sawtooth oscillators (richness + chorus)
+  const osc1 = audioCtx.createOscillator();
+  osc1.type = 'sawtooth';
+  osc1.frequency.value = freq;
+
+  const osc2 = audioCtx.createOscillator();
+  osc2.type = 'sawtooth';
+  osc2.frequency.value = freq * 1.0035;  // slight detune
+
+  // — Square wave for nasal timbre of bandoneon reed
+  const osc3 = audioCtx.createOscillator();
+  osc3.type = 'square';
+  osc3.frequency.value = freq;
+
+  // — Oscillator gains
+  const g1 = audioCtx.createGain(); g1.gain.value = 0.40;
+  const g2 = audioCtx.createGain(); g2.gain.value = 0.25;
+  const g3 = audioCtx.createGain(); g3.gain.value = 0.15;
+
+  // — Low-pass filter: bandoneon body resonance / remove harshness
+  const lpf = audioCtx.createBiquadFilter();
+  lpf.type = 'lowpass';
+  lpf.frequency.value = Math.min(freq * 5, 3200);
+  lpf.Q.value = 0.7;
+
+  // — Formant peak for nasal character (around 700–900 Hz)
+  const bpf = audioCtx.createBiquadFilter();
+  bpf.type = 'peaking';
+  bpf.frequency.value = 800;
+  bpf.Q.value = 1.5;
+  bpf.gain.value = 4;
+
+  // — Subtle LFO tremolo (bellows movement ~6 Hz)
+  const lfo = audioCtx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 6.2;
+  const lfoGain = audioCtx.createGain();
+  lfoGain.gain.value = 0.04;  // ±4% AM depth
+
+  // — Envelope
+  const env = audioCtx.createGain();
+  const atk = Math.min(0.018, duration * 0.08);
+  const rel = Math.min(0.06, duration * 0.12);
+  const susVal = 0.85 * velScale;
+  env.gain.setValueAtTime(0, actualStart);
+  env.gain.linearRampToValueAtTime(susVal, actualStart + atk);
+  env.gain.setValueAtTime(susVal, endAt - rel);
+  env.gain.linearRampToValueAtTime(0, endAt + 0.01);
+
+  // — Tremolo node (AM)
+  const tremoloNode = audioCtx.createGain();
+  tremoloNode.gain.value = 1.0;
+  lfo.connect(lfoGain);
+  lfoGain.connect(tremoloNode.gain);
+
+  // — Signal chain
+  osc1.connect(g1); osc2.connect(g2); osc3.connect(g3);
+  g1.connect(lpf); g2.connect(lpf); g3.connect(lpf);
+  lpf.connect(bpf);
+  bpf.connect(env);
+  env.connect(tremoloNode);
+  tremoloNode.connect(masterGain);
+
+  // — Start / stop
+  osc1.start(actualStart); osc1.stop(endAt + 0.08);
+  osc2.start(actualStart); osc2.stop(endAt + 0.08);
+  osc3.start(actualStart); osc3.stop(endAt + 0.08);
+  lfo.start(actualStart);  lfo.stop(endAt + 0.08);
+
+  activeOscillators.push(osc1, osc2, osc3, lfo);
+
+  // Cleanup after note ends
+  const cleanupDelay = Math.max(0, (endAt - now + 0.2) * 1000);
+  setTimeout(() => {
+    try { osc1.disconnect(); osc2.disconnect(); osc3.disconnect(); lfo.disconnect();
+          g1.disconnect(); g2.disconnect(); g3.disconnect();
+          lpf.disconnect(); bpf.disconnect(); env.disconnect();
+          tremoloNode.disconnect(); lfoGain.disconnect(); } catch(e){}
+  }, cleanupDelay);
+}
+
+function stopAllAudio() {
+  if (!audioCtx || !masterGain) return;
+  // Quick fade-out to avoid click
+  masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  masterGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.015);
+
+  const toStop = activeOscillators.slice();
+  activeOscillators = [];
+  setTimeout(() => {
+    toStop.forEach(osc => { try { osc.stop(0); } catch(e){} });
+    if (masterGain) {
+      masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+      masterGain.gain.setValueAtTime(volumeLevel, audioCtx.currentTime);
+    }
+  }, 80);
+}
+
+// ══════════════════════════════════════════════════════════
+//  PLAYBACK ENGINE
+// ══════════════════════════════════════════════════════════
+
+let midiData    = null;
+let segments    = [];
+let totalSec    = 0;
+let isPlaying   = false;
+let positionSec = 0;
+let tempoMult   = 1.0;
+let bellowsOpen = true;
+let animId      = null;
+
+// Audio sync state
+let audioCtxStartTime  = 0;   // audioCtx.currentTime when play started
+let songStartPosSec    = 0;   // song position when play started
+let schedIdx           = 0;   // next segment index to schedule
+
+const LOOK_AHEAD = 2.0;       // schedule this many seconds ahead
+
+function getCurrentSongPos() {
+  if (!isPlaying || !audioCtx) return positionSec;
+  return songStartPosSec + (audioCtx.currentTime - audioCtxStartTime) * tempoMult;
+}
+
+function scheduleUpcoming() {
+  if (!isPlaying || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  const scheduleUntilCtx = now + LOOK_AHEAD;
+  const scheduleUntilSong = songStartPosSec + (scheduleUntilCtx - audioCtxStartTime) * tempoMult;
+
+  while (schedIdx < segments.length) {
+    const seg = segments[schedIdx];
+    if (seg.startSec > scheduleUntilSong) break;
+
+    if (seg.endSec > songStartPosSec) {
+      const noteStart = audioCtxStartTime + (seg.startSec - songStartPosSec) / tempoMult;
+      const noteEnd   = audioCtxStartTime + (seg.endSec   - songStartPosSec) / tempoMult;
+      scheduleNote(midiToFreq(seg.note), noteStart, noteEnd, seg.vel || 80);
+    }
+    schedIdx++;
+  }
+}
+
+function getActiveMidiNotes(songPos) {
+  const active = new Set();
+  for (const seg of segments) {
+    if (seg.startSec > songPos + 0.05) break; // sorted → early exit
+    if (seg.startSec <= songPos && seg.endSec > songPos) active.add(seg.note);
+  }
+  return active;
+}
+
+function highlightButtons(activeNotes) {
+  const mode = bellowsOpen ? 'open' : 'close';
+  const lk = NOTE_LOOKUP[mode];
+  document.querySelectorAll('.btn-key.right-active,.btn-key.left-active').forEach(el => {
+    el.classList.remove('right-active','left-active');
+  });
+  activeNotes.forEach(note => {
+    const hits = lk[note]; if (!hits) return;
+    hits.forEach(({hand, idx}) => {
+      const gridId = hand === 'treble' ? 'right-hand-grid' : 'left-hand-grid';
+      const btn = document.querySelector(`#${gridId} [data-idx="${idx}"]`);
+      if (btn) btn.classList.add(hand === 'treble' ? 'right-active' : 'left-active');
+    });
+  });
+}
+
+function tick() {
+  if (!isPlaying) return;
+  const songPos = getCurrentSongPos();
+  positionSec = songPos;
+
+  if (songPos >= totalSec) {
+    positionSec = totalSec;
+    isPlaying = false;
+    stopAllAudio();
+    updateUI(); updateProgress();
+    highlightButtons(new Set());
+    return;
+  }
+
+  scheduleUpcoming();
+  updateProgress();
+  highlightButtons(getActiveMidiNotes(songPos));
+  animId = requestAnimationFrame(tick);
+}
+
+function play() {
+  if (!midiData || isPlaying) return;
+  initAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  songStartPosSec   = positionSec;
+  audioCtxStartTime = audioCtx.currentTime + 0.05;
+
+  // Find start index in sorted segments
+  schedIdx = 0;
+  while (schedIdx < segments.length && segments[schedIdx].endSec <= positionSec) schedIdx++;
+
+  isPlaying = true;
+  updateUI();
+  animId = requestAnimationFrame(tick);
+}
+
+function pause() {
+  if (!isPlaying) return;
+  positionSec = getCurrentSongPos();
+  isPlaying = false;
+  if (animId) cancelAnimationFrame(animId);
+  stopAllAudio();
+  updateUI(); updateProgress();
+}
+
+function seek(delta) {
+  const wasPlaying = isPlaying;
+  if (wasPlaying) {
+    positionSec = getCurrentSongPos();
+    isPlaying = false;
+    if (animId) cancelAnimationFrame(animId);
+    stopAllAudio();
+  }
+  positionSec = Math.max(0, Math.min(totalSec, positionSec + delta));
+  updateProgress();
+  highlightButtons(getActiveMidiNotes(positionSec));
+  if (wasPlaying) setTimeout(play, 90); // slight delay for audio fade
+}
+
+function seekTo(frac) {
+  const wasPlaying = isPlaying;
+  if (wasPlaying) {
+    positionSec = getCurrentSongPos();
+    isPlaying = false;
+    if (animId) cancelAnimationFrame(animId);
+    stopAllAudio();
+  }
+  positionSec = frac * totalSec;
+  updateProgress();
+  highlightButtons(getActiveMidiNotes(positionSec));
+  if (wasPlaying) setTimeout(play, 90);
+}
+
+function updateProgress() {
+  const pct = totalSec > 0 ? (positionSec / totalSec) * 100 : 0;
+  document.getElementById('progress-bar-fill').style.width = pct + '%';
+  const fmt = s => { const m=Math.floor(s/60); return m+':'+String(Math.floor(s%60)).padStart(2,'0'); };
+  document.getElementById('time-display').textContent = fmt(positionSec)+' / '+fmt(totalSec);
+}
+
+function updateUI() {
+  const has = midiData !== null;
+  document.getElementById('btn-play').disabled   = !has || isPlaying;
+  document.getElementById('btn-pause').disabled  = !has || !isPlaying;
+  document.getElementById('btn-back').disabled   = !has;
+  document.getElementById('btn-forward').disabled= !has;
+}
+
+// ══════════════════════════════════════════════════════════
+//  FILE HANDLING
+// ══════════════════════════════════════════════════════════
+
+function loadMIDI(buffer, name) {
+  try {
+    midiData = parseMIDI(buffer);
+    const result = buildSegments(midiData);
+    segments  = result.segments;
+    totalSec  = result.totalSec;
+    positionSec = 0; isPlaying = false;
+
+    document.getElementById('file-name').textContent =
+      '📄 ' + name + '（' + segments.length + ' ノート）';
+
+    updateUI(); updateProgress();
+    highlightButtons(new Set());
+  } catch(e) {
+    document.getElementById('file-name').textContent = '❌ 読み込み失敗: ' + e.message;
+    console.error(e);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  UI EVENT LISTENERS
+// ══════════════════════════════════════════════════════════
+
+document.getElementById('file-input').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = ev => loadMIDI(ev.target.result, f.name);
+  rd.readAsArrayBuffer(f);
+});
+
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('dragover');
+  const f = e.dataTransfer.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = ev => loadMIDI(ev.target.result, f.name);
+  rd.readAsArrayBuffer(f);
+});
+
+document.getElementById('btn-play').addEventListener('click', play);
+document.getElementById('btn-pause').addEventListener('click', pause);
+document.getElementById('btn-back').addEventListener('click', () => seek(-10));
+document.getElementById('btn-forward').addEventListener('click', () => seek(10));
+
+document.getElementById('tempo-slider').addEventListener('input', e => {
+  const pct = parseInt(e.target.value);
+  document.getElementById('tempo-val').textContent = pct + '%';
+  const wasPlaying = isPlaying;
+  if (wasPlaying) {
+    positionSec = getCurrentSongPos();
+    isPlaying = false;
+    if (animId) cancelAnimationFrame(animId);
+    stopAllAudio();
+  }
+  tempoMult = pct / 100;
+  if (wasPlaying) setTimeout(play, 90);
+});
+
+document.getElementById('volume-slider').addEventListener('input', e => {
+  const pct = parseInt(e.target.value);
+  document.getElementById('volume-val').textContent = pct + '%';
+  volumeLevel = pct / 100;
+  if (masterGain) {
+    masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    masterGain.gain.setTargetAtTime(volumeLevel, audioCtx.currentTime, 0.02);
+  }
+});
+
+document.getElementById('btn-bellows').addEventListener('click', () => {
+  bellowsOpen = !bellowsOpen;
+  updateBellowsUI();
+  renderBoth(bellowsOpen);
+  highlightButtons(getActiveMidiNotes(positionSec));
+});
+
+function updateBellowsUI() {
+  const btn   = document.getElementById('btn-bellows');
+  const label = document.getElementById('bellows-label');
+  const arL   = document.getElementById('arrow-left');
+  const arR   = document.getElementById('arrow-right');
+  if (bellowsOpen) {
+    btn.classList.remove('close-mode');
+    label.className='bellows-label open-label';
+    label.textContent='開き (Abriendo)';
+    arL.style.opacity=arR.style.opacity='1';
+  } else {
+    btn.classList.add('close-mode');
+    label.className='bellows-label close-label';
+    label.textContent='閉じ (Cerrando)';
+    arL.style.opacity=arR.style.opacity='0.3';
+  }
+}
+
+// Progress bar seek (click + drag)
+const progressBg = document.getElementById('progress-bar-bg');
+let draggingProg = false;
+function progSeek(e) {
+  const r = progressBg.getBoundingClientRect();
+  seekTo(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)));
+}
+progressBg.addEventListener('mousedown', e => { draggingProg=true; progSeek(e); });
+document.addEventListener('mousemove', e => { if (draggingProg) progSeek(e); });
+document.addEventListener('mouseup', () => { draggingProg=false; });
+
+// ══════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════
+renderBoth(bellowsOpen);
+updateUI(); updateProgress(); updateBellowsUI();
+</script>
+</body>
+</html>
