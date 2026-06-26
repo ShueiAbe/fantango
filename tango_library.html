@@ -577,7 +577,9 @@ async function openYouTube(s) {
       const data = await res.json();
       if (!data.error) {
         const videoId = data.items?.[0]?.id?.videoId;
-        if (videoId) ytUrl = `https://www.youtube.com/watch?v=${videoId}&autoplay=1`;
+        // embed URL をポップアップウィンドウで開く → autoplay が確実に動作する
+        // (/watch の autoplay=1 はブラウザの MEI 設定に依存するため不安定)
+        if (videoId) ytUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
       }
     } catch(e) {}
   }
