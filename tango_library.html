@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タンゴライブラリ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- ライブラリデータ: 同じフォルダの tango_library_data.js を自動ロード (file:// でも動作) -->
+<script src="tango_library_data.js" onerror="console.info('tango_library_data.js not found')"></script>
+<style>
+:root{
+  --bg:#090707;--surf:#140b0b;--surf2:#1b1010;
+  --border:#2c1818;--border2:#3a2020;
+  --red:#b83028;--red2:#8c2218;--gold:#c89010;--gold2:#a07008;
+  --text:#e0cca0;--dim:#7a6a4a;--dim2:#504030;
+  --green:#1a8040;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-serif;font-size:13px;display:flex;flex-direction:column;height:100vh}
+
+/* ── TOP BAR ── */
+#topbar{background:var(--surf);border-bottom:1px solid var(--border);padding:7px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap}
+#topbar h1{font-size:1.05em;color:var(--gold);letter-spacing:.08em;white-space:nowrap;margin-right:2px}
+.btn{padding:5px 12px;border:1px solid var(--border2);border-radius:5px;background:var(--surf2);color:var(--text);cursor:pointer;font-size:.84em;transition:all .15s;white-space:nowrap}
+.btn:hover{border-color:var(--gold);color:var(--gold)}
+.btn-sm{padding:3px 8px;font-size:.78em}
+.sep{width:1px;height:20px;background:var(--border2);flex-shrink:0}
+
+.pill{
+  display:none;font-size:.74em;padding:3px 9px;border-radius:12px;
+  border:1px solid var(--border2);background:var(--bg);
+  color:var(--dim);white-space:nowrap;max-width:220px;
+  overflow:hidden;text-overflow:ellipsis;
+}
+.pill.active{color:var(--gold2);border-color:var(--gold2)}
+#libStats{font-size:.76em;color:var(--dim);white-space:nowrap;margin-left:auto}
+
+/* scan progress */
+#scanProg{flex:1 0 100%;display:none;padding:4px 0 2px}
+.pbar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:3px}
+.pfill{height:100%;background:linear-gradient(90deg,var(--red2),var(--gold));width:0%;transition:width .3s}
+.ptext{font-size:.74em;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── FILTER BAR ── */
+#fbar{background:var(--surf);border-bottom:1px solid var(--border);padding:6px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0}
+#searchBox{padding:4px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:.85em;width:200px;outline:none}
+#searchBox:focus{border-color:var(--gold)}
+.fsel{padding:4px 7px;background:var(--bg);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:.83em;outline:none;cursor:pointer}
+.flabel{font-size:.76em;color:var(--dim);white-space:nowrap}
+#fcount{margin-left:auto;font-size:.76em;color:var(--dim);white-space:nowrap}
+
+/* ── MAIN ── */
+#main{flex:1;overflow:hidden;display:flex}
+#tblWrap{flex:1;overflow:auto}
+
+/* ── TABLE ── */
+#tbl{width:100%;border-collapse:collapse;font-size:.82em;table-layout:fixed}
+#tbl th{background:var(--surf2);color:var(--dim);font-weight:600;padding:7px 10px;text-align:left;position:sticky;top:0;z-index:10;border-bottom:2px solid var(--border2);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none}
+#tbl th:hover{color:var(--gold)}
+#tbl th.asc::after{content:' ▲';font-size:.7em;color:var(--gold)}
+#tbl th.desc::after{content:' ▼';font-size:.7em;color:var(--gold)}
+#tbl td{padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+#tbl tbody tr:nth-child(odd) td{background:#0d0808}
+#tbl tbody tr:nth-child(even) td{background:#130c0c}
+#tbl tr:hover td{background:#1e1008!important}
+#tbl tr.sel td{background:#261200!important;border-bottom-color:#3a2000}
+.td-num{text-align:right;color:var(--dim);font-variant-numeric:tabular-nums}
+.td-analyzed{color:var(--text)!important}
+.chip{display:inline-block;font-size:.72em;padding:1px 7px;border-radius:10px;background:rgba(176,48,40,.18);border:1px solid var(--red2);color:var(--red)}
+.chip.vals{background:rgba(200,144,16,.14);border-color:var(--gold2);color:var(--gold)}
+.chip.milonga{background:rgba(26,128,64,.14);border-color:#1a6030;color:var(--green)}
+
+/* ── EMPTY ── */
+#empty{display:none;padding:40px 20px;text-align:center}
+#empty h2{color:var(--dim);font-size:1.05em;margin-bottom:12px}
+.path-hint{
+  display:inline-block;margin:14px auto;max-width:520px;
+  background:var(--surf);border:1px solid var(--border2);border-radius:8px;
+  padding:14px 20px;text-align:left;
+}
+.path-hint .ph-note{font-size:.71em;color:var(--dim);line-height:1.5}
+
+/* ── YT KEY BAR (topbar inline) ── */
+#ytKeyBar{display:none;gap:6px;align-items:center}
+#ytKeyBar input{background:var(--bg);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:5px;font-size:.82em;width:260px;outline:none}
+#ytKeyBar input:focus{border-color:var(--gold)}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <h1>🎵 タンゴライブラリ</h1>
+  <div id="mblPill" class="pill"></div>
+
+  <div class="sep"></div>
+
+  <button class="btn btn-sm" id="btnExcel" style="display:none" onclick="exportToExcel()" title="全曲情報をExcelに出力">📊 Excel出力</button>
+  <button class="btn btn-sm" id="btnSaveCache" style="display:none" onclick="exportCache()" title="解析データをJSONに保存">💾 解析を保存</button>
+  <button class="btn btn-sm" id="btnLoadCache" onclick="importCache()" title="解析JSONを読み込む">📂 解析を読込</button>
+
+  <div class="sep"></div>
+
+  <!-- YouTube API key -->
+  <div id="ytKeyBar">
+    <input id="ytKeyInput" type="text" placeholder="YouTube Data API v3 キー…">
+    <button class="btn btn-sm" onclick="saveYtKey()">保存</button>
+    <button class="btn btn-sm" onclick="document.getElementById('ytKeyBar').style.display='none'" style="opacity:.5">✕</button>
+  </div>
+  <button class="btn btn-sm" id="btnYtKey" onclick="toggleYtKeyBar()" title="YouTube Data API v3 キーを設定">⚙ YouTube APIキー</button>
+
+  <div id="scanProg">
+    <div class="pbar"><div class="pfill" id="scanFill"></div></div>
+    <div class="ptext" id="scanText">…</div>
+  </div>
+  <span id="libStats"></span>
+</div>
+
+<!-- FILTER BAR -->
+<div id="fbar">
+  <span id="fcount"></span>
+</div>
+
+<!-- MAIN: table full width -->
+<div id="main">
+  <div id="tblWrap">
+    <div id="empty">
+      <h2>🎼 ライブラリを読み込んでいます…</h2>
+      <div class="path-hint">
+        <div class="ph-note">
+          <b>tango_library_data.js</b> が見つかりません。<br>
+          このHTMLと同じフォルダに <b>tango_library_data.js</b> を置いてください。
+        </div>
+      </div>
+    </div>
+    <table id="tbl" style="display:none">
+      <thead><tr>
+        <th data-col="title" style="width:220px">曲名</th>
+        <th data-col="orchestra" style="width:200px">オーケストラ</th>
+        <th data-col="singer" style="width:170px">歌手</th>
+        <th data-col="genre" style="width:100px">ジャンル</th>
+        <th data-col="year" style="width:50px">年</th>
+        <th data-col="duration" style="width:56px" title="曲の長さ">長さ</th>
+        <th data-col="rating" style="width:48px">評価</th>
+        <th data-col="bpm" style="width:52px">BPM</th>
+        <th data-col="kizami" style="width:50px" title="刻み/小節">刻み</th>
+        <th data-col="synco" style="width:52px" title="シンコペ /10">シンコ</th>
+        <th data-col="undulate" style="width:52px" title="ウネり /10">ウネり</th>
+        <th data-col="poly" style="width:50px" title="多重度">多重</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+const library = [];
+let filtered = [];
+let sortCol = 'title', sortDir = 1;
+let selId = null;
+
+const CACHE_KEY     = 'tango_analy_v3';
+const LS_MBL        = 'tango_mbl_name';
+const LS_MBL_TRACKS = 'tango_mbl_tracks_v1';
+let anaCache = {};
+try { anaCache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch(e) {}
+
+const GENRES = [
+  { key:'T', re:/tango/i,   label:'Tango',   cls:'' },
+  { key:'V', re:/vals/i,    label:'Vals',    cls:'vals' },
+  { key:'M', re:/milonga/i, label:'Milonga', cls:'milonga' },
+];
+
+// ══════════════════════════════════════════
+//  MBL PARSER
+// ══════════════════════════════════════════
+function parseSongTitle(raw) {
+  if (!raw) return { songName: raw, year: null, genreCode: null, orchestra: '', singer: '' };
+  const stripped = raw.replace(/\s*__[A-Z_]+__\s*$/, '').trim();
+  const m = stripped.match(/^(.+?)\s*\(([TMVtmv])(\d{4})\)\s*(.*)$/);
+  if (!m) return { songName: stripped, year: null, genreCode: null, orchestra: '', singer: '' };
+  const songName   = m[1].trim();
+  const genreCode  = m[2].toUpperCase();
+  const year       = parseInt(m[3], 10);
+  const rest       = m[4].trim();
+  let orchestra = '', singer = '';
+  if (rest) {
+    const sep = rest.indexOf(' / ');
+    if (sep >= 0) { orchestra = rest.slice(0, sep).trim(); singer = rest.slice(sep + 3).trim(); }
+    else { orchestra = rest; }
+  }
+  orchestra = orchestra.replace(/\s*__[A-Z_]+__.*$/i, '').trim();
+  singer    = singer.replace(/\s*__[A-Z_]+__.*$/i, '').trim();
+  return { songName, year, genreCode, orchestra, singer };
+}
+
+function basename(path) {
+  return (path.split(/[\\\/]/).pop() || '').replace(/\.[^.]+$/, '');
+}
+
+async function parseMBL(buffer) {
+  const bytes = new Uint8Array(buffer);
+  if (bytes[0] === 0x1F && bytes[1] === 0x8B) {
+    try {
+      const ds = new DecompressionStream('gzip');
+      const writer = ds.writable.getWriter();
+      writer.write(buffer); writer.close();
+      const chunks = [];
+      const reader = ds.readable.getReader();
+      while (true) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); }
+      const total = chunks.reduce((s, c) => s + c.length, 0);
+      const out = new Uint8Array(total); let off = 0;
+      for (const c of chunks) { out.set(c, off); off += c.length; }
+      return parseMBL(out.buffer);
+    } catch (e) { console.warn('gzip decompress failed', e); }
+  }
+  const head = new TextDecoder('utf-8', { fatal: false }).decode(bytes.slice(0, 6));
+  if (head.trimStart().startsWith('<') || head.startsWith('\xEF\xBB\xBF<')) {
+    return parseMBLasXML(bytes);
+  }
+  return parseMBLBinary(bytes);
+}
+
+function parseMBLasXML(bytes) {
+  try {
+    const xml = new TextDecoder('utf-8').decode(bytes);
+    const doc = new DOMParser().parseFromString(xml, 'text/xml');
+    const tracks = [];
+    const dicts = doc.querySelectorAll('dict > dict');
+    dicts.forEach(dict => {
+      const t = xmlDictToObj(dict);
+      tracks.push({
+        filePath: decodeURIComponent((t['Location'] || '').replace(/^file:\/\/\//, '').replace(/\//g, '\\')),
+        title:    t['Name']   || '',
+        artist:   t['Artist'] || '',
+        grouping: t['Album Artist'] || '',
+        genre:    t['Genre']  || '',
+        year:     t['Year']   || '',
+        rating:   t['Rating'] != null ? Math.round(t['Rating'] * 255 / 100) : null,
+        duration: t['Total Time'] != null ? t['Total Time'] / 1000 : null,
+      });
+    });
+    if (tracks.length) return tracks;
+    const trackEls = doc.querySelectorAll('Track,track,Song,song,Item,item');
+    trackEls.forEach(el => {
+      const g = n => (el.querySelector(n) || el.getAttribute(n.toLowerCase()) || '');
+      const durRaw = g('Duration') || g('TotalTime') || '';
+      const ratRaw = g('Rating') || '';
+      tracks.push({
+        filePath: g('Location') || g('Filename') || g('Path') || '',
+        title:    g('Title') || g('Name') || '',
+        artist:   g('Artist') || '',
+        grouping: g('AlbumArtist') || g('Album Artist') || '',
+        genre:    g('Genre') || '',
+        year:     g('Year') || '',
+        rating:   ratRaw ? parseInt(ratRaw) : null,
+        duration: durRaw ? (parseFloat(durRaw) > 900 ? parseFloat(durRaw) / 1000 : parseFloat(durRaw)) : null,
+      });
+    });
+    return tracks;
+  } catch (e) { return []; }
+}
+
+function xmlDictToObj(dict) {
+  const obj = {};
+  const children = [...dict.children];
+  for (let i = 0; i < children.length - 1; i += 2) {
+    if (children[i].tagName === 'key') {
+      const val = children[i + 1];
+      obj[children[i].textContent] = val.tagName === 'integer' ? parseInt(val.textContent)
+                                   : val.tagName === 'real'    ? parseFloat(val.textContent)
+                                   : val.textContent;
+    }
+  }
+  return obj;
+}
+
+function parseMBLBinary(bytes) {
+  setScan(30, 'バイナリ構造を解析中…');
+  let offset = 0;
+  function readByte() { if (offset >= bytes.length) throw new Error('Unexpected EOF'); return bytes[offset++]; }
+  function readUint16LE() { const v = bytes[offset] | (bytes[offset+1]<<8); offset+=2; return v>>>0; }
+  function readInt32LE() { const v = bytes[offset]|(bytes[offset+1]<<8)|(bytes[offset+2]<<16)|(bytes[offset+3]<<24); offset+=4; return v|0; }
+  function skip(n) { offset += n; }
+  function readDotNetString() {
+    let len=0,shift=0;
+    for(let i=0;i<5;i++){const b=readByte();len|=(b&0x7F)<<shift;if((b&0x80)===0)break;shift+=7;}
+    if(len===0)return'';
+    const end=offset+len,slice=bytes.subarray(offset,end);offset=end;
+    try{return new TextDecoder('utf-8',{fatal:true}).decode(slice);}catch(e){return new TextDecoder('utf-8',{fatal:false}).decode(slice);}
+  }
+  const headerInt = readInt32LE();
+  const count = (headerInt >>> 8) & 0xFFFFFF;
+  if (count <= 0 || count > 500000) throw new Error(`MBL ヘッダー異常: count=${count}`);
+  setScan(50, `${count}件のトラックを解析中…`);
+  const TAG_TITLE=65, TAG_ARTIST=32, TAG_GROUPING=61, TAG_GENRE=59, TAG_YEAR=88, TAG_RATING=75;
+  const tracks = [];
+  for (let i = 0; i < count; i++) {
+    if (offset >= bytes.length) break;
+    if (i % 500 === 0 && i > 0) setScan(50+Math.round(i/count*45), `${i}/${count}件解析済み…`);
+    const designation = readByte();
+    if (designation === 1) break;
+    if (designation === 0 || designation >= 10) throw new Error(`予期しないdesignation=${designation}`);
+    skip(1); skip(1); skip(2); skip(8); skip(2);
+    const filePath = readDotNetString();
+    const fileSize = readInt32LE(); skip(4); skip(1); skip(1); skip(2);
+    const trackLengthMs = readInt32LE(); skip(8); skip(8);
+    while (offset < bytes.length) {
+      const artType = readByte(); if (artType >= 254) break;
+      readDotNetString(); skip(1); readDotNetString();
+    }
+    skip(1);
+    const tags = {};
+    while (offset < bytes.length) {
+      const tagCode = readByte(); if (tagCode === 0) break;
+      if (tagCode === 255) { const cueCount = readUint16LE(); skip(cueCount*13); break; }
+      tags[tagCode] = readDotNetString();
+    }
+    const duration = trackLengthMs > 0 ? trackLengthMs / 1000 : null;
+    const ratingStr = tags[TAG_RATING];
+    let rating = null;
+    if (ratingStr != null && ratingStr !== '') { const r = parseFloat(ratingStr); if (!isNaN(r)) rating = r; }
+    tracks.push({
+      filePath, fileSize,
+      title:    tags[TAG_TITLE]    || '',
+      artist:   tags[TAG_ARTIST]   || '',
+      grouping: tags[TAG_GROUPING] || '',
+      genre:    tags[TAG_GENRE]    || '',
+      year:     tags[TAG_YEAR]     || '',
+      rating, duration,
+    });
+  }
+  return tracks;
+}
+
+// ══════════════════════════════════════════
+//  LOAD: MBL ファイル
+// ══════════════════════════════════════════
+async function loadMBL() {
+  if (!window.showOpenFilePicker) { alert('Chrome / Edge v86以上が必要です。'); return; }
+  let fh;
+  try {
+    [fh] = await window.showOpenFilePicker({
+      types: [{ description: 'MusicBee Library', accept: { 'application/octet-stream': ['.mbl','.xml'] } }],
+      multiple: false
+    });
+  } catch(e) { return; }
+  const file = await fh.getFile();
+  showScan(true);
+  setScan(5, `読み込み中: ${file.name}`);
+  let tracks;
+  try {
+    const buf = await file.arrayBuffer();
+    setScan(15, 'フォーマット解析中…');
+    tracks = await parseMBL(buf);
+  } catch(e) {
+    showScan(false);
+    alert('MBL解析エラー: ' + e.message);
+    return;
+  }
+  setScan(75, `${tracks.length}件を検出。ライブラリを構築中…`);
+  localStorage.removeItem(CACHE_KEY);
+  Object.keys(anaCache).forEach(k => delete anaCache[k]);
+  populateLibrary(tracks);
+  showScan(false);
+  try { localStorage.setItem(LS_MBL_TRACKS, JSON.stringify(tracks)); } catch(e) {}
+  const pill = document.getElementById('mblPill');
+  pill.textContent = '📚 ' + file.name;
+  pill.className = 'pill active';
+  pill.style.display = '';
+  localStorage.setItem(LS_MBL, file.name);
+  finalizeLibraryLoad();
+}
+
+// ══════════════════════════════════════════
+//  LIBRARY POPULATION
+// ══════════════════════════════════════════
+function populateLibrary(tracks) {
+  library.length = 0;
+  Object.assign(anaCache, JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'));
+  let id = 0;
+  for (const t of tracks) {
+    const rawTitle  = t.title || basename(t.filePath || '') || '';
+    const parsed    = parseSongTitle(rawTitle);
+    const title     = rawTitle || '—';
+    const orchestra = t.artist   || '';
+    const singer    = t.grouping || '';
+    const gk = GENRES.find(g => g.re.test(t.genre || '')) || null;
+    const genreCode = parsed.genreCode || (gk ? gk.key : null);
+    const year = parseInt(String(t.year || '').slice(0, 4)) || parsed.year || 0;
+    let ratingRaw = t.rating, ratingStars = null;
+    if (ratingRaw != null) {
+      if      (ratingRaw <= 5)   ratingStars = Math.round(ratingRaw);
+      else if (ratingRaw <= 10)  ratingStars = Math.round(ratingRaw / 2);
+      else                       ratingStars = Math.round(ratingRaw / 255 * 5);
+    }
+    const rating = ratingStars != null ? ratingStars / 5 : null;
+    const cacheKey = t.filePath ? basename(t.filePath) + '_' + (t.fileSize || '0') : null;
+    library.push({
+      id: 's' + (id++),
+      filePath: t.filePath || null,
+      title, orchestra, singer, genreCode,
+      genreKey: gk ? gk.key : '',
+      genre:    t.genre || '',
+      year, rating, ratingStars,
+      duration: t.duration || null,
+      analysis: cacheKey ? (anaCache[cacheKey] || null) : null,
+      cacheKey
+    });
+  }
+}
+
+function finalizeLibraryLoad() {
+  const analyzed = library.filter(s => s.analysis).length;
+  document.getElementById('libStats').textContent = `${library.length}曲 / 解析済み${analyzed}曲`;
+  if (!library.length) {
+    document.getElementById('empty').style.display = 'block';
+    document.getElementById('empty').querySelector('h2').textContent = '対象ジャンルの曲が見つかりません';
+    document.getElementById('tbl').style.display = 'none';
+    return;
+  }
+  document.getElementById('btnExcel').style.display = '';
+  document.getElementById('btnSaveCache').style.display = '';
+  applyFilter();
+}
+
+// ══════════════════════════════════════════
+//  FILTER + TABLE RENDER
+// ══════════════════════════════════════════
+function applyFilter() {
+  filtered = library.filter(s =>
+    s.title && s.title !== '—' &&
+    s.orchestra &&
+    s.genreKey && ['T','V','M'].includes(s.genreKey)
+  );
+  filtered.sort((a, b) => {
+    let va, vb;
+    if (sortCol === 'rating') { va = a.rating ?? -1; vb = b.rating ?? -1; }
+    else if (sortCol === 'duration') { va = a.duration ?? -1; vb = b.duration ?? -1; }
+    else if (['bpm','kizami','synco','undulate','poly'].includes(sortCol)) {
+      va = a.analysis?.[sortCol] ?? -1; vb = b.analysis?.[sortCol] ?? -1;
+    }
+    else { va = a[sortCol] ?? ''; vb = b[sortCol] ?? ''; }
+    if (typeof va === 'string') return sortDir * va.localeCompare(vb, 'ja');
+    return sortDir * (va - vb);
+  });
+  document.getElementById('fcount').textContent = `${filtered.length} / ${library.length} 曲`;
+  renderTable();
+}
+
+const GENRE_LABEL = { T:'Tango', V:'Vals', M:'Milonga' };
+const GENRE_CLS   = { T:'', V:'vals', M:'milonga' };
+
+function renderTable() {
+  if (!library.length) return;
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('tbl').style.display = '';
+  const tb = document.getElementById('tbody');
+  tb.innerHTML = '';
+  filtered.forEach(s => {
+    const an = s.analysis;
+    const gk = s.genreKey || (/tango/i.test(s.genre)?'T':/vals/i.test(s.genre)?'V':/milonga/i.test(s.genre)?'M':'');
+    const genreCell = gk
+      ? `<span class="chip ${GENRE_CLS[gk]||''}">${GENRE_LABEL[gk]}</span>`
+      : (s.genre ? `<span class="chip" style="opacity:.5">${esc(s.genre)}</span>` : '—');
+    const tr = document.createElement('tr');
+    tr.dataset.id = s.id;
+    if (s.id === selId) tr.classList.add('sel');
+    tr.innerHTML = `
+      <td title="${esc(s.title)}">${esc(s.title)}</td>
+      <td title="${esc(s.orchestra)}">${esc(s.orchestra)||'—'}</td>
+      <td title="${esc(s.singer)}">${esc(s.singer)||'—'}</td>
+      <td>${genreCell}</td>
+      <td class="td-num">${s.year||'—'}</td>
+      <td class="td-num">${s.duration ? fmt(s.duration) : '—'}</td>
+      <td class="td-num">${s.ratingStars != null ? s.ratingStars : '<span style="color:var(--dim2)">—</span>'}</td>
+      <td class="td-num ${an?'td-analyzed':''}">${an?an.bpm||'—':'—'}</td>
+      <td class="td-num ${an?'td-analyzed':''}">${an&&an.kizami!=null?an.kizami.toFixed(1):'—'}</td>
+      <td class="td-num ${an?'td-analyzed':''}">${an&&an.synco!=null?(an.synco*10).toFixed(1):'—'}</td>
+      <td class="td-num ${an?'td-analyzed':''}">${an&&an.undulate!=null?(an.undulate*10).toFixed(1):'—'}</td>
+      <td class="td-num ${an?'td-analyzed':''}">${an&&an.poly!=null?an.poly.toFixed(1):'—'}</td>
+    `;
+    tr.addEventListener('click', () => clickSong(s.id));
+    tb.appendChild(tr);
+  });
+  document.querySelectorAll('#tbl th[data-col]').forEach(th => {
+    th.classList.remove('asc','desc');
+    if (th.dataset.col === sortCol) th.classList.add(sortDir > 0 ? 'asc' : 'desc');
+  });
+}
+
+document.querySelectorAll('#tbl th[data-col]').forEach(th => {
+  th.addEventListener('click', () => {
+    if (!th.dataset.col) return;
+    if (sortCol === th.dataset.col) sortDir *= -1;
+    else { sortCol = th.dataset.col; sortDir = 1; }
+    applyFilter();
+  });
+});
+
+const fmt = s => { const m=Math.floor(s/60); return `${m}:${String(Math.floor(s%60)).padStart(2,'0')}`; };
+
+// ══════════════════════════════════════════
+//  SONG CLICK → YouTube
+// ══════════════════════════════════════════
+function clickSong(id) {
+  const s = library.find(x => x.id === id); if (!s) return;
+  selId = id;
+  renderTable();
+  openYouTube(s);
+}
+
+// ══════════════════════════════════════════
+//  YOUTUBE
+// ══════════════════════════════════════════
+function toggleYtKeyBar() {
+  const bar = document.getElementById('ytKeyBar');
+  const shown = bar.style.display === 'flex';
+  if (!shown) {
+    document.getElementById('ytKeyInput').value = localStorage.getItem('yt_api_key') || '';
+    bar.style.display = 'flex';
+    document.getElementById('btnYtKey').style.display = 'none';
+  } else {
+    bar.style.display = 'none';
+    document.getElementById('btnYtKey').style.display = '';
+  }
+}
+
+function saveYtKey() {
+  const key = document.getElementById('ytKeyInput').value.trim();
+  localStorage.setItem('yt_api_key', key);
+  document.getElementById('ytKeyBar').style.display = 'none';
+  document.getElementById('btnYtKey').style.display = '';
+}
+
+let _ytWin = null;
+
+async function openYouTube(s) {
+  const parts = [s.title, s.orchestra];
+  if (s.singer) parts.push(s.singer);
+  const query = parts.join(' ');
+  const apiKey = localStorage.getItem('yt_api_key') || '';
+  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+
+  // ① ユーザージェスチャー内（await前）でウィンドウを確保
+  const isNew = !_ytWin || _ytWin.closed;
+  if (isNew) {
+    // 新規: まず空ページで開く → about:blank のままなので後で location.href を設定できる
+    _ytWin = window.open('', 'yt_tango',
+      'width=1100,height=750,menubar=no,toolbar=no,location=yes,status=no');
+    try {
+      _ytWin.document.write(
+        `<!DOCTYPE html><html><body style="background:#0f0f0f;color:#aaa;` +
+        `font-family:sans-serif;display:flex;align-items:center;justify-content:center;` +
+        `height:100vh;margin:0"><div style="text-align:center">` +
+        `<div style="font-size:1.3em;margin-bottom:10px">🔍</div>` +
+        `<div>${esc(query)}</div><div style="opacity:.5;font-size:.85em;margin-top:6px">検索中…</div>` +
+        `</div></body></html>`
+      );
+    } catch(e) {}
+  } else {
+    _ytWin.focus();
+  }
+
+  // ② URLを決定
+  let ytUrl = searchUrl;
+  if (apiKey) {
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=1&key=${encodeURIComponent(apiKey)}`
+      );
+      const data = await res.json();
+      if (!data.error) {
+        const videoId = data.items?.[0]?.id?.videoId;
+        if (videoId) ytUrl = `https://www.youtube.com/watch?v=${videoId}&autoplay=1`;
+      }
+    } catch(e) {}
+  }
+
+  // ③ ナビゲート
+  if (!_ytWin || _ytWin.closed) return;
+  if (isNew) {
+    // about:blank のまま → location.href を直接設定（同一オリジンなので可）
+    try { _ytWin.location.href = ytUrl; } catch(e) {}
+  } else {
+    // 既存ウィンドウ（YouTube上にある = クロスオリジン）
+    // features なしの window.open は既存ウィンドウへのナビゲーションとして扱われる
+    window.open(ytUrl, 'yt_tango');
+  }
+}
+
+// ══════════════════════════════════════════
+//  EXCEL EXPORT
+// ══════════════════════════════════════════
+function exportToExcel() {
+  if (!library.length) { alert('ライブラリが未読み込みです'); return; }
+  if (typeof XLSX === 'undefined') { alert('SheetJSが読み込まれていません。オンライン環境で実行してください。'); return; }
+  const rows = library.map(s => {
+    const an = s.analysis;
+    const tot = an ? (Object.values(an.bands).reduce((a, b) => a + b, 0) || 1) : 1;
+    const pct = (v, t) => an ? parseFloat((v / t * 100).toFixed(1)) : '';
+    return {
+      '曲名':          s.title,
+      'オーケストラ':  s.orchestra,
+      '歌手':          s.singer,
+      'ジャンル':      GENRE_LABEL[s.genreKey] || s.genre,
+      '年':            s.year || '',
+      '評価':          s.ratingStars != null ? s.ratingStars : '',
+      '曲の長さ':      s.duration ? fmt(s.duration) : '',
+      'BPM':           an ? (an.bpm || '') : '',
+      '刻み/小節':     an && an.kizami   != null ? parseFloat(an.kizami.toFixed(1))        : '',
+      'シンコペ/10':   an && an.synco    != null ? parseFloat((an.synco*10).toFixed(1))    : '',
+      'ウネり/10':     an && an.undulate != null ? parseFloat((an.undulate*10).toFixed(1)) : '',
+      '多重度':        an && an.poly     != null ? parseFloat(an.poly.toFixed(1))          : '',
+      'Sub%':          pct(an?.bands?.sub  || 0, tot),
+      'Bass%':         pct(an?.bands?.bass || 0, tot),
+      'Mid%':          pct(an?.bands?.mid  || 0, tot),
+      'HiMid%':        pct(an?.bands?.hmid || 0, tot),
+      'Treble%':       pct(an?.bands?.treb || 0, tot),
+      'ファイルパス':  s.filePath || '',
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [
+    {wch:38},{wch:24},{wch:20},{wch:14},{wch:5},{wch:7},{wch:8},
+    {wch:5},{wch:8},{wch:9},{wch:8},{wch:7},
+    {wch:6},{wch:6},{wch:6},{wch:7},{wch:8},{wch:55}
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'タンゴライブラリ');
+  const now = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  XLSX.writeFile(wb, `tango_library_${now}.xlsx`);
+}
+
+// ══════════════════════════════════════════
+//  ANALYSIS CACHE EXPORT / IMPORT
+// ══════════════════════════════════════════
+function exportCache() {
+  const count = Object.keys(anaCache).length;
+  if (!count) { alert('保存する解析データがありません'); return; }
+  const blob = new Blob([JSON.stringify(anaCache)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const now = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  a.download = `tango_analysis_${now}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+async function importCache() {
+  if (!window.showOpenFilePicker) { alert('Chrome / Edge v86以上が必要です。'); return; }
+  let fh;
+  try {
+    [fh] = await window.showOpenFilePicker({
+      types: [{ description: 'Analysis JSON', accept: { 'application/json': ['.json'] } }]
+    });
+  } catch(e) { return; }
+  try {
+    const imported = JSON.parse(await (await fh.getFile()).text());
+    const prev = Object.keys(anaCache).length;
+    Object.assign(anaCache, imported);
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(anaCache)); } catch(e) {}
+    library.forEach(s => { if (s.cacheKey && anaCache[s.cacheKey]) s.analysis = anaCache[s.cacheKey]; });
+    if (library.length) {
+      applyFilter();
+      document.getElementById('libStats').textContent =
+        `${library.length}曲 / 解析済み${library.filter(x=>x.analysis).length}曲`;
+    }
+    const added = Object.keys(anaCache).length - prev;
+    alert(`${Object.keys(imported).length}件を読み込みました（新規: ${added}件）`);
+  } catch(e) {
+    alert('JSON読み込みエラー: ' + e.message);
+  }
+}
+
+// ══════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════
+function showScan(on) { document.getElementById('scanProg').style.display=on?'block':'none'; }
+function setScan(pct, text) {
+  if (pct!=null) document.getElementById('scanFill').style.width=pct+'%';
+  document.getElementById('scanText').textContent=text;
+}
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// ══════════════════════════════════════════
+//  JSON ライブラリ読み込み
+// ══════════════════════════════════════════
+function loadFromJSON(data) {
+  if (!data || !Array.isArray(data.tracks) || !data.tracks.length) return false;
+  localStorage.removeItem(CACHE_KEY);
+  Object.keys(anaCache).forEach(k => delete anaCache[k]);
+
+  const rawTracks = data.tracks.map(t => {
+    let duration = null;
+    const ls = t['曲の長さ'];
+    if (ls) {
+      const pts = String(ls).split(':').map(Number);
+      if (pts.length === 2) duration = pts[0] * 60 + (pts[1] || 0);
+      else if (pts.length === 3) duration = pts[0] * 3600 + pts[1] * 60 + (pts[2] || 0);
+    }
+    let rating = null;
+    if (t['評価'] != null) { const r = parseFloat(t['評価']); if (!isNaN(r)) rating = r; }
+    const fp = t['ファイルパス'] || null;
+    if (fp && t['BPM'] != null) {
+      const key = basename(fp) + '_0';
+      anaCache[key] = {
+        bpm:       t['BPM'] || 0,
+        kizami:    t['刻み/小節']   != null ? parseFloat(t['刻み/小節'])       : null,
+        synco:     t['シンコペ/10'] != null ? parseFloat(t['シンコペ/10']) / 10 : null,
+        undulate:  t['ウネり/10']   != null ? parseFloat(t['ウネり/10'])   / 10 : null,
+        poly:      t['多重度']      != null ? parseFloat(t['多重度'])            : null,
+        bands:     {
+          sub:  t['Sub%']    || 0,
+          bass: t['Bass%']   || 0,
+          mid:  t['Mid%']    || 0,
+          hmid: t['HiMid%']  || 0,
+          treb: t['Treble%'] || 0,
+        },
+        beatPeriod: t['BPM'] ? 60 / t['BPM'] : 0,
+      };
+    }
+    return {
+      filePath: fp, fileSize: 0,
+      title:    t['曲名']        || '',
+      artist:   t['オーケストラ'] || '',
+      grouping: t['歌手']        || '',
+      genre:    t['ジャンル']    || '',
+      year:     t['年'] != null ? String(t['年']) : '',
+      rating, duration,
+    };
+  });
+
+  populateLibrary(rawTracks);
+  finalizeLibraryLoad();
+
+  const p = document.getElementById('mblPill');
+  p.textContent = '📋 tango_library_data.js';
+  p.className = 'pill active';
+  p.style.display = 'inline-block';
+  return true;
+}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+document.getElementById('empty').style.display = 'block';
+
+(async () => {
+  let jsonLoaded = false;
+
+  // 1. tango_library_data.js (同期ロード済み)
+  if (window.TANGO_LIBRARY_DATA) {
+    jsonLoaded = loadFromJSON(window.TANGO_LIBRARY_DATA);
+  }
+
+  // 2. fetch fallback (サーバー環境)
+  if (!jsonLoaded) {
+    try {
+      const r = await fetch('./tango_library.json');
+      if (r.ok) { jsonLoaded = loadFromJSON(await r.json()); }
+    } catch(e) {}
+  }
+
+  // 3. MBLキャッシュから復元
+  if (!jsonLoaded) {
+    const raw = localStorage.getItem(LS_MBL_TRACKS);
+    if (raw) {
+      try {
+        const tracks = JSON.parse(raw);
+        if (Array.isArray(tracks) && tracks.length) {
+          populateLibrary(tracks);
+          finalizeLibraryLoad();
+          const mblName = localStorage.getItem(LS_MBL) || 'キャッシュ';
+          const p = document.getElementById('mblPill');
+          p.textContent = '📚 ' + mblName;
+          p.className = 'pill active';
+          p.style.display = '';
+        }
+      } catch(e) {
+        localStorage.removeItem(LS_MBL_TRACKS);
+      }
+    }
+  }
+})();
+</script>
+</body>
+</html>
