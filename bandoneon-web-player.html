@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bandoneon Web Player</title>
+<title>Bandoneon Web Player v2.2</title>
 <style>
   :root{
     --bg:#161014;
@@ -30,7 +30,7 @@
   body.bellows-open{ --accent:var(--gold); }
   body.bellows-close{ --accent:var(--blue); }
 
-  .app{max-width:1180px;margin:0 auto;padding:20px 20px 60px;}
+  .app{max-width:1360px;margin:0 auto;padding:20px 20px 60px;}
 
   header.topbar{
     display:flex;flex-wrap:wrap;align-items:center;gap:16px;justify-content:space-between;
@@ -41,6 +41,10 @@
     color:var(--gold);text-shadow:0 0 12px rgba(212,175,106,.35);
   }
   header.topbar h1 small{display:block;font-size:12px;color:var(--muted);font-weight:400;margin-top:2px;}
+  header.topbar h1 .ver{
+    font-size:11px;font-weight:600;color:var(--muted);vertical-align:middle;
+    border:1px solid #4d383e;border-radius:5px;padding:2px 6px;text-shadow:none;
+  }
 
   .drop-zone{
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -104,10 +108,38 @@
   .sliders-row span{color:var(--ink);font-variant-numeric:tabular-nums;}
   input[type=range]{width:100%;accent-color:var(--gold);}
 
-  main.hands{display:flex;flex-direction:column;gap:26px;}
+  /* 和音コード表示（同時3音以上のときのみ点灯） */
+  .chord-bar{
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    background:var(--panel);border:1px solid #3a2a2f;border-radius:12px;
+    padding:10px 18px;margin-bottom:22px;min-height:60px;
+  }
+  .chord-bar .chord-caption{
+    font-size:10px;color:var(--muted);letter-spacing:1px;
+    writing-mode:horizontal-tb;white-space:nowrap;
+  }
+  .chord-name{
+    font-size:28px;font-weight:700;line-height:1;white-space:nowrap;
+    color:var(--accent);text-shadow:0 0 14px rgba(212,175,106,.35);
+  }
+  .chord-notes{
+    display:flex;gap:6px;flex-wrap:wrap;align-items:center;
+  }
+  .chord-notes .pc{
+    font-size:12px;font-weight:600;color:var(--ink);
+    background:rgba(212,175,106,.10);border:1px solid #4d383e;
+    border-radius:5px;padding:3px 7px;line-height:1;
+  }
+  .chord-notes .pc.bass{color:var(--accent);border-color:var(--accent);}
+  .chord-count{font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap;}
+  .chord-bar.idle .chord-name{color:#5a4247;text-shadow:none;}
+  .chord-bar.idle .chord-count{opacity:.5;}
+
+  /* 左手を左、右手を右に横並び。幅が足りない場合は自動で縦積みに折り返す */
+  main.hands{display:flex;flex-direction:row;flex-wrap:wrap;gap:20px;align-items:flex-start;}
   .hand-panel{
     background:var(--panel-2);border:1px solid #3a2a2f;border-radius:12px;
-    padding:16px;overflow-x:auto;
+    padding:16px;overflow-x:auto;flex:0 1 auto;min-width:0;
   }
   .hand-panel h2{
     margin:0 0 12px;font-size:14px;color:var(--muted);font-weight:600;
@@ -142,7 +174,7 @@
 <div class="app">
 
   <header class="topbar">
-    <h1>🪗 Bandoneon Web Player<small>Rheinische Tonlage 142 (AA式) — 38+33 ボタン ビジュアライザー</small></h1>
+    <h1>🪗 Bandoneon Web Player <span class="ver">v2.2</span><small>Rheinische Tonlage 142 (AA式) — 38+33 ボタン ビジュアライザー</small></h1>
     <div class="drop-zone" id="dropZone">
       <input type="file" id="fileInput" accept=".mid,.midi" hidden>
       <button id="pickFileBtn">MIDIファイルを選択</button>
@@ -182,19 +214,27 @@
     </div>
   </section>
 
+  <div class="chord-bar idle" id="chordBar">
+    <span class="chord-caption">CHORD</span>
+    <span class="chord-name" id="chordName">—</span>
+    <span class="chord-notes" id="chordNotes"></span>
+    <span class="chord-count" id="chordCount">同時3音以上で表示</span>
+  </div>
+
   <main class="hands">
-    <div class="hand-panel right-panel">
-      <h2>右手 (旋律) <span class="tag">38 buttons</span></h2>
-      <div id="rightHand" class="hand-container"></div>
-    </div>
     <div class="hand-panel left-panel">
       <h2>左手 (伴奏) <span class="tag">33 buttons</span></h2>
       <div id="leftHand" class="hand-container"></div>
     </div>
+    <div class="hand-panel right-panel">
+      <h2>右手 (旋律) <span class="tag">38 buttons</span></h2>
+      <div id="rightHand" class="hand-container"></div>
+    </div>
   </main>
 
   <footer class="hint">
-    ボタンをクリックすると単音を試聴できます。蛇腹（開き/閉じ）を切り替えるとバイソニック（同じボタンで異なる音）の対応表とハイライトが変わります。
+    ボタンをクリックすると単音を試聴できます。蛇腹（開き/閉じ）を切り替えるとバイソニック（同じボタンで異なる音）の対応表とハイライトが変わります。<br>
+    コード欄は同時に3音以上鳴っているときだけ点灯します。左端のチップが最低音（ベース）で、コード名が「近似」の場合は経過音などが含まれた解釈です。
   </footer>
 </div>
 
@@ -247,8 +287,8 @@ const BASS_BUTTONS = [
 
 const T_OFF_X = 432, T_OFF_Y = 92;
 const B_OFF_X = 82,  B_OFF_Y = 98;
-const COORD_SCALE = 2.2;
-const BTN_DIAM = 52;
+const COORD_SCALE = 1.8;   // 左右の手を横並びに収めるための表示倍率
+const BTN_DIAM = 44;
 
 /* ===================== 2. Rendering (fan layout, math rotation) ===================== */
 function renderHand(container, buttons, offX, offY, rotation){
@@ -293,10 +333,10 @@ function renderHand(container, buttons, offX, offY, rotation){
   });
 }
 
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 function midiToLabel(midi){
-  const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
   const oct = Math.floor(midi/12)-1;
-  return names[midi%12]+oct;
+  return NOTE_NAMES[midi%12]+oct;
 }
 
 /* ===================== 3. Note lookup maps ===================== */
@@ -606,17 +646,126 @@ leftEls.forEach((el, idx) => el.addEventListener("click", () => {
   playPreview(player.bellowsOpen ? b.o : b.c);
 }));
 
+/* ---- 和音コード判定 ----
+   ルート候補ごとに音程セットを作りテンプレートと完全一致を探す。
+   最低音がルートでない場合は分数コード (例 C/E) として表示する。 */
+const CHORD_TEMPLATES = [
+  {iv:[0,4,7],        name:""},
+  {iv:[0,3,7],        name:"m"},
+  {iv:[0,3,6],        name:"dim"},
+  {iv:[0,4,8],        name:"aug"},
+  {iv:[0,5,7],        name:"sus4"},
+  {iv:[0,2,7],        name:"sus2"},
+  {iv:[0,4,7,10],     name:"7"},
+  {iv:[0,4,7,11],     name:"maj7"},
+  {iv:[0,3,7,10],     name:"m7"},
+  {iv:[0,3,6,10],     name:"m7b5"},
+  {iv:[0,3,6,9],      name:"dim7"},
+  {iv:[0,4,7,9],      name:"6"},
+  {iv:[0,3,7,9],      name:"m6"},
+  {iv:[0,3,7,11],     name:"mMaj7"},
+  {iv:[0,5,7,10],     name:"7sus4"},
+  {iv:[0,2,4,7],      name:"add9"},
+  {iv:[0,2,3,7],      name:"madd9"},
+  {iv:[0,2,4,7,10],   name:"9"},
+  {iv:[0,2,3,7,10],   name:"m9"},
+  {iv:[0,2,4,7,11],   name:"maj9"},
+  {iv:[0,2,5,7,10],   name:"9sus4"},
+  {iv:[0,2,4,7,9],    name:"6/9"},
+];
+
+function detectChord(notes){
+  const sorted = [...notes].sort((a,b)=>a-b);
+  const bassPc = sorted[0] % 12;
+  const pcs = [...new Set(sorted.map(n=>n%12))].sort((a,b)=>a-b);
+
+  // 低音から順に、重複しないピッチクラス名を並べる
+  const seen = new Set(), ordered = [];
+  for (const n of sorted){
+    const pc = n%12;
+    if (!seen.has(pc)){ seen.add(pc); ordered.push(NOTE_NAMES[pc]); }
+  }
+
+  // 完全一致を最優先しつつ、経過音などが混ざった場合も最も妥当な解釈を選ぶ
+  const pcSet = new Set(pcs);
+  let best = null;
+  for (const root of pcs){
+    for (let ti=0; ti<CHORD_TEMPLATES.length; ti++){
+      const t = CHORD_TEMPLATES[ti];
+      const tset = new Set(t.iv.map(i => (root+i)%12));
+      let matched = 0;
+      tset.forEach(pc => { if (pcSet.has(pc)) matched++; });
+      const missing = tset.size - matched;
+      const extra   = pcs.length - matched;
+      const exact   = (missing===0 && extra===0);
+      // 構成音の欠落は重く見る（欠けた大きなコードより、ぴたり合う小さなコードを選ぶ）
+      const score = (exact ? 1000 : 0)
+                  + matched*10 - missing*14 - extra*6
+                  + (root===bassPc ? 4 : 0)
+                  - ti*0.01;              // 同点なら単純なコードを優先
+      if (!best || score > best.score) best = {score, root, tpl:t, exact, matched};
+    }
+  }
+
+  let name = null, exact = false;
+  if (best && best.matched >= 3){
+    name = NOTE_NAMES[best.root] + best.tpl.name;
+    if (best.root !== bassPc) name += "/" + NOTE_NAMES[bassPc];
+    exact = best.exact;
+  }
+  return {name, exact, pcNames: ordered, voiceCount: sorted.length};
+}
+
+const chordBar = document.getElementById("chordBar");
+const chordNameEl = document.getElementById("chordName");
+const chordNotesEl = document.getElementById("chordNotes");
+const chordCountEl = document.getElementById("chordCount");
+let lastChordKey = null;
+
+function updateChordDisplay(activeNotes){
+  // 同時3音以上のときだけ表示する
+  if (activeNotes.length < 3){
+    if (lastChordKey !== null){
+      lastChordKey = null;
+      chordBar.classList.add("idle");
+      chordNameEl.textContent = "—";
+      chordNotesEl.innerHTML = "";
+      chordCountEl.textContent = "同時3音以上で表示";
+    }
+    return;
+  }
+  const res = detectChord(activeNotes);
+  const key = res.pcNames.join(",")+"|"+res.name+"|"+res.voiceCount+"|"+res.exact;
+  if (key === lastChordKey) return;   // 変化した時だけDOMを触る
+  lastChordKey = key;
+
+  chordBar.classList.remove("idle");
+  chordNameEl.textContent = res.name || "?";
+  chordNotesEl.innerHTML = "";
+  res.pcNames.forEach((n, i) => {
+    const el = document.createElement("span");
+    el.className = "pc" + (i===0 ? " bass" : "");
+    el.textContent = n;
+    chordNotesEl.appendChild(el);
+  });
+  chordCountEl.textContent = res.voiceCount + "音" +
+    (!res.name ? " (該当コードなし)" : (res.exact ? "" : " (近似)"));
+}
+
 let activeHighlight = new Set();
 function updateHighlights(musicSec){
   const map = player.bellowsOpen ? noteMaps.open : noteMaps.close;
   const nextKeys = new Set();
+  const activeNotes = [];
   for (const seg of player.segments){
     if (seg.startSec > musicSec) break;
     if (seg.startSec <= musicSec && musicSec < seg.endSec){
+      activeNotes.push(seg.note);
       const targets = map[seg.note];
       if (targets) targets.forEach(t => nextKeys.add(t.hand+"_"+t.idx));
     }
   }
+  updateChordDisplay(activeNotes);
   activeHighlight.forEach(key => {
     if (!nextKeys.has(key)){
       const [hand, idx] = key.split("_");
@@ -706,20 +855,49 @@ function writeVarLen(value){
   while (value>0){ bytes.unshift((value&0x7f)|0x80); value>>=7; }
   return bytes;
 }
+/* 左手の和音の上に右手の旋律が重なる短いイ短調の進行。
+   絶対ティックでイベントを組み立ててからデルタタイムに変換するので、
+   和音と旋律が本当に同時に鳴る（コード表示の確認用）。 */
 function buildDemoMidi(){
-  const melody = [67,71,74,79,74,71,67,64,67,71,74,71,67,62,64,67];
-  const bass   = [43,50,55,50];
+  const BEAT = 480, BAR = BEAT*2;   // 和音1つ = 2拍
+  const chords = [
+    [45,52,57,60],  // Am
+    [50,57,62,65],  // Dm
+    [40,56,59,62],  // E7
+    [45,52,57,60],  // Am
+    [45,52,57,60],  // Am
+    [50,57,62,65],  // Dm
+    [40,56,59,62],  // E7
+    [45,52,57,60],  // Am
+  ];
+  const melody = [
+    69,71,72,74,76,77,76,74,
+    72,74,76,72,71,69,71,72,
+    74,76,77,79,77,76,74,72,
+    71,72,74,71,69,68,69,69,
+  ];
+
+  const events = [];
+  const addNote = (ch, note, startTick, lenTick, vel) => {
+    events.push({tick:startTick,          order:1, data:[0x90|ch, note, vel]});
+    events.push({tick:startTick+lenTick,  order:0, data:[0x80|ch, note, 0]});
+  };
+  chords.forEach((notes, i) => {
+    notes.forEach(n => addNote(1, n, i*BAR, BAR-20, 68));
+  });
+  melody.forEach((n, i) => {
+    addNote(0, n, i*(BEAT/2), BEAT/2-15, 100);
+  });
+  // 同じティックではノートオフを先に出して音の途切れを防ぐ
+  events.sort((a,b) => a.tick-b.tick || a.order-b.order);
+
   const bytes = [];
-  bytes.push(...writeVarLen(0), 0xFF,0x51,0x03, 0x06,0x1A,0x80); // ~150bpm
-  let first = true;
-  melody.forEach(n => {
-    bytes.push(...writeVarLen(first?0:0), 0x90, n, 96); first=false;
-    bytes.push(...writeVarLen(240), 0x80, n, 0);
-  });
-  bass.forEach((n,i) => {
-    bytes.push(...writeVarLen(0), 0x91, n, 70);
-    bytes.push(...writeVarLen(960), 0x81, n, 0);
-  });
+  bytes.push(...writeVarLen(0), 0xFF,0x51,0x03, 0x07,0xA1,0x20); // 120bpm
+  let prevTick = 0;
+  for (const ev of events){
+    bytes.push(...writeVarLen(ev.tick-prevTick), ...ev.data);
+    prevTick = ev.tick;
+  }
   bytes.push(...writeVarLen(0), 0xFF,0x2F,0x00);
 
   const trackLen = bytes.length;
